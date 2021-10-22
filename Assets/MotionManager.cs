@@ -9,26 +9,41 @@ public class MotionManager : MonoBehaviour
     private GameObject leftHand;
     private GameObject rightHand;
     private GameObject head;
-    private Camera Cam = Camera.main;
+    private Camera Cam;
     private float interval = 0.1f; // Sampling interval in seconds
-    private int t = 5;
-    private float delta = 1; // Time window for time, space and flow efforts calculations in seconds
-    private int T;
+    private int t = 5; // Sampling memory (queue) size
+    private float delta = 1; // Time window for efforts calculations in seconds
+    private int T; // Efforts queue size
     private Queue<Vector3> leftHandPositionQueue = new Queue<Vector3>();
     private Queue<Vector3> rightHandPositionQueue = new Queue<Vector3>();
     private Queue<Vector3> headPositionQueue = new Queue<Vector3>();
     private Queue<Vector3> leftHandAccelQueue = new Queue<Vector3>();
     private Queue<Vector3> rightHandAccelQueue = new Queue<Vector3>();
     private Queue<Vector3> headAccelQueue = new Queue<Vector3>();
+    private Queue<Vector3> leftHandJerkQueue = new Queue<Vector3>();
+    private Queue<Vector3> rightHandJerkQueue = new Queue<Vector3>();
+    private Queue<Vector3> headJerkQueue = new Queue<Vector3>();
+    private Queue<float> weightQueue = new Queue<float>();
+    private Queue<Vector3> leftHandSpaceNumeratorQueue = new Queue<Vector3>();
+    private Queue<Vector3> rightHandSpaceNumeratorQueue = new Queue<Vector3>();
+    private Queue<Vector3> headSpaceNumeratorQueue = new Queue<Vector3>();
     private float timeAlpha = 1; // Alpha time for joint(s)
+    private float weightAlpha = 1; // Alpha weight for joint(s)
+    private float spaceAlpha = 1; // Alpha space for joint(s)
+    private float flowAlpha = 1; // Alpha flow for joint(s)
 
 
-    public void JointTracking()
+    void Start()
     {
+        Cam = GetComponent<Camera>();
         leftHand = GameObject.Find("Bot");
         rightHand = GameObject.Find("Bot");
         head = GameObject.Find("Bot");
         T = (int)(delta / interval);
+    }
+
+    public void JointTracking()
+    {
         StartCoroutine(OnFrame());
     }
 
@@ -37,41 +52,90 @@ public class MotionManager : MonoBehaviour
     {
          for(;;) 
         {
+            // Write t last positions to memory
             Vector3 leftHandPosition = Cam.WorldToScreenPoint(leftHand.transform.position);
-            InsertIntoMemory(leftHandPosition, leftHandPositionQueue);
+            InsertIntoMemory(leftHandPosition, leftHandPositionQueue, t);
 
             Vector3 rightHandPosition = Cam.WorldToScreenPoint(rightHand.transform.position);
-            InsertIntoMemory(rightHandPosition, rightHandPositionQueue);
+            InsertIntoMemory(rightHandPosition, rightHandPositionQueue, t);
 
             Vector3 headPosition = Cam.WorldToScreenPoint(head.transform.position);
-            InsertIntoMemory(headPosition, headPositionQueue);
+            InsertIntoMemory(headPosition, headPositionQueue, t);
 
+            // Calculate velocity
             Vector3 leftHandVelocity = CalculateVelocity(leftHandPositionQueue);
             Vector3 rightHandVelocity = CalculateVelocity(rightHandPositionQueue);
             Vector3 headVelocity = CalculateVelocity(headPositionQueue);
 
+            // Calculate acceleration
             Vector3 leftHandAccel = CalculateAcceleration(leftHandPositionQueue);
-            InsertIntoMemory(leftHandAccel, leftHandAccelQueue);
+            InsertIntoMemory(leftHandAccel, leftHandAccelQueue, t);
 
             Vector3 rightHandAccel = CalculateAcceleration(rightHandPositionQueue);
-            InsertIntoMemory(rightHandAccel, rightHandAccelQueue);
+            InsertIntoMemory(rightHandAccel, rightHandAccelQueue, t);
 
             Vector3 headAccel = CalculateAcceleration(headPositionQueue);
-            InsertIntoMemory(headAccel, headAccelQueue);
+            InsertIntoMemory(headAccel, headAccelQueue, t);
 
+            // Calculate jerk
+            Vector3 leftHandJerk = CalculateJerk(leftHandPositionQueue);
+            InsertIntoMemory(leftHandJerk, leftHandJerkQueue, t);
+
+            Vector3 rightHandJerk = CalculateJerk(rightHandPositionQueue);
+            InsertIntoMemory(rightHandJerk, rightHandJerkQueue, t);
+
+            Vector3 headJerk = CalculateJerk(headPositionQueue);
+            InsertIntoMemory(headJerk, headJerkQueue, t);
+
+            // Calculate curvature
+            float leftHandCurvature = CalculateCurvature(leftHandVelocity, leftHandAccel);
+            float rightHandCurvature = CalculateCurvature(rightHandVelocity, rightHandAccel);
+            float headCurvature = CalculateCurvature(headVelocity, headAccel);
+
+            // Calcuylate weight effort
+            float energy = weightAlpha * leftHandVelocity.sqrMagnitude + weightAlpha * rightHandVelocity.sqrMagnitude + weightAlpha * headVelocity.sqrMagnitude;
+            InsertIntoMemory(energy, weightQueue, T);
+
+            float[] weightArray = weightQueue.ToArray();
+            float weight = Mathf.Max(weightArray);
+
+            // Calculate time effort
             float leftHandTime = CalculateTime(leftHandAccelQueue);
             float rightHandTime = CalculateTime(rightHandAccelQueue);
             float headTime = CalculateTime(headAccelQueue);
 
-            float time = timeAlpha * leftHandTime + timeAlpha * rightHandTime - timeAlpha * headTime;
+            float time = timeAlpha * leftHandTime + timeAlpha * rightHandTime + timeAlpha * headTime;
+
+            // Calculate space effort
+            Vector3 leftHandSpaceNumerator = CalculateSpaceNumerator(leftHandPositionQueue);
+            InsertIntoMemory(leftHandSpaceNumerator, leftHandSpaceNumeratorQueue, T);
+
+            Vector3 rightHandSpaceNumerator = CalculateSpaceNumerator(rightHandPositionQueue);
+            InsertIntoMemory(rightHandSpaceNumerator, rightHandSpaceNumeratorQueue, T);
+
+            Vector3 headSpaceNumerator = CalculateSpaceNumerator(headPositionQueue);
+            InsertIntoMemory(headSpaceNumerator, headSpaceNumeratorQueue, T);
+
+            float leftHandSpace = CalculateSpace(leftHandSpaceNumeratorQueue);
+            float rightHandSpace = CalculateSpace(rightHandSpaceNumeratorQueue);
+            float headSpace = CalculateSpace(headSpaceNumeratorQueue);
+
+            float space = spaceAlpha * leftHandSpace + spaceAlpha * rightHandSpace + spaceAlpha * headSpace;
+            
+            // Calculate flow effort
+            float leftHandFlow = CalculateFlow(leftHandJerkQueue);
+            float rightHandFlow = CalculateFlow(rightHandPositionQueue);
+            float headFlow = CalculateFlow(headJerkQueue);
+
+            float flow = flowAlpha * leftHandFlow + flowAlpha * rightHandFlow + flowAlpha * headFlow;
 
             yield return new WaitForSeconds(interval);
         }
     }
 
-    void InsertIntoMemory<Type>(Type elem, Queue<Type> queue)
+    void InsertIntoMemory<Type>(Type elem, Queue<Type> queue, int size)
     {
-        if (queue.Count == t) queue.Dequeue();
+        if (queue.Count == size) queue.Dequeue();
         queue.Enqueue(elem);
     }
 
@@ -122,5 +186,55 @@ public class MotionManager : MonoBehaviour
         }
 
         return time / T;
+    }
+
+    Vector3 CalculateSpaceNumerator(Queue<Vector3> positionQueue)
+    {
+        Vector3[] positionArray = positionQueue.ToArray();
+        Vector3 spaceNumerator;
+        spaceNumerator.x = Mathf.Abs(positionArray[2].x - positionArray[1].x);
+        spaceNumerator.y = Mathf.Abs(positionArray[2].y - positionArray[1].y);
+        spaceNumerator.z = Mathf.Abs(positionArray[2].z - positionArray[1].z);
+        return spaceNumerator;
+    }
+    
+    float CalculateSpace(Queue<Vector3> spaceNumeratorQueue)
+    {
+        Vector3[] spaceNumeratorArray = spaceNumeratorQueue.ToArray();
+        Vector3 spaceNumeratorSumVector = Vector3.zero;
+        Array.ForEach(spaceNumeratorArray, i => spaceNumeratorSumVector += i);
+
+        Vector3 spaceDenominatorVector;
+        spaceDenominatorVector.x = Mathf.Abs(spaceNumeratorArray[0].x - spaceNumeratorArray[T- 1].x);
+        spaceDenominatorVector.y = Mathf.Abs(spaceNumeratorArray[0].y - spaceNumeratorArray[T- 1].y);
+        spaceDenominatorVector.z = Mathf.Abs(spaceNumeratorArray[0].z - spaceNumeratorArray[T -1].z);
+
+        Vector3 spaceVector;
+        spaceVector.x = spaceNumeratorSumVector.x / spaceDenominatorVector.x;
+        spaceVector.y = spaceNumeratorSumVector.y / spaceDenominatorVector.y;
+        spaceVector.z = spaceNumeratorSumVector.z / spaceDenominatorVector.z;
+        float space = spaceVector.magnitude;
+        return space;
+    }
+
+    float CalculateFlow(Queue<Vector3> jerkQueue)
+    {
+        float flow = 0;
+
+        foreach (var jerk in jerkQueue)
+        {
+            flow += jerk.magnitude;
+        }
+
+        return flow / T;
+    }
+
+    private static Tuple<float, float> ScaleValue(float value, float valueMax)
+    {
+        if (value > valueMax)
+        { valueMax = value; };
+        float result = value / valueMax;
+        var tuple = new Tuple<float, float>(result, valueMax);
+        return tuple;
     }
 }
