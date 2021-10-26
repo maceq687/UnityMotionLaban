@@ -101,10 +101,12 @@ public class MotionManager : MonoBehaviour
                 float headCurvature = CalculateCurvature(headVelocity, headAccel);
 
                 // Calculate weight effort
+                // Formula no.22
                 float energy = weightAlpha[0] * leftHandVelocity.sqrMagnitude + weightAlpha[1] * rightHandVelocity.sqrMagnitude + weightAlpha[2] * headVelocity.sqrMagnitude;
                 InsertIntoMemory(energy, weightQueue, T);
 
                 float[] weightArray = weightQueue.ToArray();
+                // Formula no.23
                 float weight = Mathf.Max(weightArray);
 
                 var weightResult = ScaleValue(weight, weightMax);
@@ -115,7 +117,7 @@ public class MotionManager : MonoBehaviour
                 float leftHandTime = CalculateTime(leftHandAccelQueue);
                 float rightHandTime = CalculateTime(rightHandAccelQueue);
                 float headTime = CalculateTime(headAccelQueue);
-
+                // Formula no.25
                 float time = timeAlpha[0] * leftHandTime + timeAlpha[1] * rightHandTime + timeAlpha[2] * headTime;
 
                 var timeResult = ScaleValue(time, timeMax);
@@ -137,7 +139,7 @@ public class MotionManager : MonoBehaviour
                     float leftHandSpace = CalculateSpace(leftHandSpaceNumeratorQueue);
                     float rightHandSpace = CalculateSpace(rightHandSpaceNumeratorQueue);
                     float headSpace = CalculateSpace(headSpaceNumeratorQueue);
-
+                    // Formula no.27
                     float space = spaceAlpha[0] * leftHandSpace + spaceAlpha[1] * rightHandSpace + spaceAlpha[2] * headSpace;
 
                     var spaceResult = ScaleValue(space, spaceMax);
@@ -151,7 +153,7 @@ public class MotionManager : MonoBehaviour
                 float leftHandFlow = CalculateFlow(leftHandJerkQueue);
                 float rightHandFlow = CalculateFlow(rightHandJerkQueue);
                 float headFlow = CalculateFlow(headJerkQueue);
-
+                // Formula no.30
                 float flow = flowAlpha[0] * leftHandFlow + flowAlpha[1] * rightHandFlow + flowAlpha[2] * headFlow;
 
                 var flowResult = ScaleValue(flow, flowMax);
@@ -174,6 +176,7 @@ public class MotionManager : MonoBehaviour
     Vector3 CalculateVelocity(Queue<Vector3> positionQueue)
     {
         Vector3[] positionArray = positionQueue.ToArray();
+        // Formula no.3
         Vector3 velocityVector;
         velocityVector.x = (positionArray[3].x - positionArray[1].x) / 2 * interval;
         velocityVector.y = (positionArray[3].y - positionArray[1].y) / 2 * interval;
@@ -184,6 +187,7 @@ public class MotionManager : MonoBehaviour
     Vector3 CalculateAcceleration(Queue<Vector3> positionQueue)
     {
         Vector3[] positionArray = positionQueue.ToArray();
+        // Formula no.5
         Vector3 accelerationVector;
         accelerationVector.x = (positionArray[3].x - 2 * positionArray[2].x + positionArray[1].x) / Convert.ToSingle(Math.Pow(interval,2));
         accelerationVector.y = (positionArray[3].y - 2 * positionArray[2].y + positionArray[1].y) / Convert.ToSingle(Math.Pow(interval,2));
@@ -194,6 +198,7 @@ public class MotionManager : MonoBehaviour
     Vector3 CalculateJerk(Queue<Vector3> positionQueue)
     {
         Vector3[] positionArray = positionQueue.ToArray();
+        // Formula no.7
         Vector3 jerkVector;
         jerkVector.x = (positionArray[4].x - 2 * positionArray[3].x + 2 * positionArray[1].x - positionArray[0].x) / Convert.ToSingle(2 * Math.Pow(interval,3));
         jerkVector.y = (positionArray[4].y - 2 * positionArray[3].y + 2 * positionArray[1].y - positionArray[0].y) / Convert.ToSingle(2 * Math.Pow(interval,3));
@@ -203,6 +208,7 @@ public class MotionManager : MonoBehaviour
 
     float CalculateCurvature(Vector3 velocityVector, Vector3 accelerationVector)
     {
+        // Formula no.9
         Vector3 curvatureCross = Vector3.Cross(accelerationVector, velocityVector);
         float curvature = Convert.ToSingle(curvatureCross.magnitude / Math.Pow(velocityVector.magnitude,3));
         return curvature;
@@ -211,7 +217,7 @@ public class MotionManager : MonoBehaviour
     float CalculateTime(Queue<Vector3> accelQueue)
     {
         float time = 0;
-
+        // Formula no.24
         foreach (var accel in accelQueue)
         {
             time += accel.magnitude;
@@ -243,7 +249,7 @@ public class MotionManager : MonoBehaviour
         if (denominatorX != 0 ) spaceDenominatorVector.x = denominatorX;
         if (denominatorY != 0 ) spaceDenominatorVector.y = denominatorY;
         if (denominatorZ != 0 ) spaceDenominatorVector.z = denominatorZ;
-
+        // Formula no.26
         Vector3 spaceVector = Vector3.zero;
         spaceVector.x = spaceNumeratorSumVector.x / spaceDenominatorVector.x;
         spaceVector.y = spaceNumeratorSumVector.y / spaceDenominatorVector.y;
@@ -255,7 +261,7 @@ public class MotionManager : MonoBehaviour
     float CalculateFlow(Queue<Vector3> jerkQueue)
     {
         float flow = 0;
-
+        // Formula no.29
         foreach (var jerk in jerkQueue)
         {
             flow += jerk.magnitude;
