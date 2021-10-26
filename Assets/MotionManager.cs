@@ -149,7 +149,7 @@ public class MotionManager : MonoBehaviour
                 
                 // Calculate flow effort
                 float leftHandFlow = CalculateFlow(leftHandJerkQueue);
-                float rightHandFlow = CalculateFlow(rightHandPositionQueue);
+                float rightHandFlow = CalculateFlow(rightHandJerkQueue);
                 float headFlow = CalculateFlow(headJerkQueue);
 
                 float flow = flowAlpha[0] * leftHandFlow + flowAlpha[1] * rightHandFlow + flowAlpha[2] * headFlow;
