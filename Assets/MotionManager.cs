@@ -28,10 +28,10 @@ public class MotionManager : MonoBehaviour
     private Queue<Vector3> leftHandSpaceNumeratorQueue = new Queue<Vector3>();
     private Queue<Vector3> rightHandSpaceNumeratorQueue = new Queue<Vector3>();
     private Queue<Vector3> headSpaceNumeratorQueue = new Queue<Vector3>();
-    private float[] timeAlpha = new float[3] {2,2,1}; // Joints time alphas
-    private float[] weightAlpha = new float[3] {2,2,1}; // Joint weight alphas
-    private float[] spaceAlpha = new float[3] {2,2,1}; // Joints space alphas
-    private float[] flowAlpha = new float[3] {2,2,1}; // joints flow alphas
+    private float[] timeAlpha = new float[3] {0.4F,0.4F,0.2F}; // Joints time alphas
+    private float[] weightAlpha = new float[3] {0.4F,0.4F,0.2F}; // Joint weight alphas
+    private float[] spaceAlpha = new float[3] {0.4F,0.4F,0.2F}; // Joints space alphas
+    private float[] flowAlpha = new float[3] {0.4F,0.4F,0.2F}; // joints flow alphas
     private float weightMax = 1;
     private float timeMax = 1;
     private float spaceMax = 1;
@@ -50,11 +50,16 @@ public class MotionManager : MonoBehaviour
 
     public void JointTracking()
     {
-        StartCoroutine(OnFrame());
+        StartCoroutine(OnInterval());
     }
 
+    /// <summary>
+    /// Folowing code is an implementation of the Laban Movement Analysis based on the review contained in C. Larboulette and S. Gibet,
+    /// “A review of computable expressive descriptors of human motion,” in Proceedings of the 2nd International Workshop on Movement and Computing, 2015, pp. 21–28,
+    /// https://doi.org/10.1145/2790994.2790998
+    /// </summary>
 
-    IEnumerator OnFrame()
+    private IEnumerator OnInterval()
     {
          for(;;) 
         {
@@ -70,12 +75,16 @@ public class MotionManager : MonoBehaviour
 
             if (leftHandPositionQueue.Count == t)
             {
-                // Calculate velocity
+                /// <summary>
+                /// Calculating joints velocity.
+                /// </summary>
                 Vector3 leftHandVelocity = CalculateVelocity(leftHandPositionQueue);
                 Vector3 rightHandVelocity = CalculateVelocity(rightHandPositionQueue);
                 Vector3 headVelocity = CalculateVelocity(headPositionQueue);
 
-                // Calculate acceleration
+                /// <summary>
+                /// Calculating joints acceleration.
+                /// </summary>
                 Vector3 leftHandAccel = CalculateAcceleration(leftHandPositionQueue);
                 InsertIntoMemory(leftHandAccel, leftHandAccelQueue, t);
 
@@ -85,7 +94,9 @@ public class MotionManager : MonoBehaviour
                 Vector3 headAccel = CalculateAcceleration(headPositionQueue);
                 InsertIntoMemory(headAccel, headAccelQueue, t);
 
-                // Calculate jerk
+                /// <summary>
+                /// Calculating joints jerk.
+                /// </summary>
                 Vector3 leftHandJerk = CalculateJerk(leftHandPositionQueue);
                 InsertIntoMemory(leftHandJerk, leftHandJerkQueue, t);
 
@@ -95,12 +106,16 @@ public class MotionManager : MonoBehaviour
                 Vector3 headJerk = CalculateJerk(headPositionQueue);
                 InsertIntoMemory(headJerk, headJerkQueue, t);
 
-                // Calculate curvature
+                /// <summary>
+                /// Calculating joints curvature.
+                /// </summary>
                 float leftHandCurvature = CalculateCurvature(leftHandVelocity, leftHandAccel);
                 float rightHandCurvature = CalculateCurvature(rightHandVelocity, rightHandAccel);
                 float headCurvature = CalculateCurvature(headVelocity, headAccel);
 
-                // Calculate weight effort
+                /// <summary>
+                /// Calculating weight effort
+                /// </summary>
                 // Formula no.22
                 float energy = weightAlpha[0] * leftHandVelocity.sqrMagnitude + weightAlpha[1] * rightHandVelocity.sqrMagnitude + weightAlpha[2] * headVelocity.sqrMagnitude;
                 InsertIntoMemory(energy, weightQueue, T);
@@ -113,7 +128,9 @@ public class MotionManager : MonoBehaviour
                 weight = weightResult.Item1;
                 weightMax = weightResult.Item2;
 
-                // Calculate time effort
+                /// <summary>
+                /// Calculating time effort.
+                /// </summary>
                 float leftHandTime = CalculateTime(leftHandAccelQueue);
                 float rightHandTime = CalculateTime(rightHandAccelQueue);
                 float headTime = CalculateTime(headAccelQueue);
@@ -124,7 +141,9 @@ public class MotionManager : MonoBehaviour
                 time = timeResult.Item1;
                 timeMax = timeResult.Item2;
 
-                // Calculate space effort
+                /// <summary>
+                /// Calculating space effort.
+                /// </summary>
                 Vector3 leftHandSpaceNumerator = CalculateSpaceNumerator(leftHandPositionQueue);
                 InsertIntoMemory(leftHandSpaceNumerator, leftHandSpaceNumeratorQueue, T);
 
@@ -149,7 +168,9 @@ public class MotionManager : MonoBehaviour
                     Debug.Log("Space: " + space);
                 }
                 
-                // Calculate flow effort
+                /// <summary>
+                /// Calculating flow effort.
+                /// </summary>
                 float leftHandFlow = CalculateFlow(leftHandJerkQueue);
                 float rightHandFlow = CalculateFlow(rightHandJerkQueue);
                 float headFlow = CalculateFlow(headJerkQueue);
@@ -167,54 +188,48 @@ public class MotionManager : MonoBehaviour
         }
     }
 
-    void InsertIntoMemory<Type>(Type elem, Queue<Type> queue, int size)
+    private void InsertIntoMemory<Type>(Type elem, Queue<Type> queue, int size)
     {
         if (queue.Count == size) queue.Dequeue();
         queue.Enqueue(elem);
     }
 
-    Vector3 CalculateVelocity(Queue<Vector3> positionQueue)
+    private Vector3 CalculateVelocity(Queue<Vector3> positionQueue)
     {
         Vector3[] positionArray = positionQueue.ToArray();
         // Formula no.3
         Vector3 velocityVector;
-        velocityVector.x = (positionArray[3].x - positionArray[1].x) / 2 * interval;
-        velocityVector.y = (positionArray[3].y - positionArray[1].y) / 2 * interval;
-        velocityVector.z = (positionArray[3].z - positionArray[1].z) / 2 * interval;
+        velocityVector = (positionArray[3] - positionArray[1]) / (2 * interval);
         return velocityVector;
     }
 
-    Vector3 CalculateAcceleration(Queue<Vector3> positionQueue)
+    private Vector3 CalculateAcceleration(Queue<Vector3> positionQueue)
     {
         Vector3[] positionArray = positionQueue.ToArray();
         // Formula no.5
         Vector3 accelerationVector;
-        accelerationVector.x = (positionArray[3].x - 2 * positionArray[2].x + positionArray[1].x) / Convert.ToSingle(Math.Pow(interval,2));
-        accelerationVector.y = (positionArray[3].y - 2 * positionArray[2].y + positionArray[1].y) / Convert.ToSingle(Math.Pow(interval,2));
-        accelerationVector.z = (positionArray[3].z - 2 * positionArray[2].z + positionArray[1].z) / Convert.ToSingle(Math.Pow(interval,2));
+        accelerationVector = (positionArray[3] - 2 * positionArray[2] + positionArray[1]) / (float)(Math.Pow(interval,2));
         return accelerationVector;
     }
 
-    Vector3 CalculateJerk(Queue<Vector3> positionQueue)
+    private Vector3 CalculateJerk(Queue<Vector3> positionQueue)
     {
         Vector3[] positionArray = positionQueue.ToArray();
         // Formula no.7
         Vector3 jerkVector;
-        jerkVector.x = (positionArray[4].x - 2 * positionArray[3].x + 2 * positionArray[1].x - positionArray[0].x) / Convert.ToSingle(2 * Math.Pow(interval,3));
-        jerkVector.y = (positionArray[4].y - 2 * positionArray[3].y + 2 * positionArray[1].y - positionArray[0].y) / Convert.ToSingle(2 * Math.Pow(interval,3));
-        jerkVector.z = (positionArray[4].z - 2 * positionArray[3].z + 2 * positionArray[1].z - positionArray[0].z) / Convert.ToSingle(2 * Math.Pow(interval,3));
+        jerkVector = (positionArray[4] - 2 * positionArray[3] + 2 * positionArray[1] - positionArray[0]) / (float)(2 * Math.Pow(interval,3));
         return jerkVector;
     }
 
-    float CalculateCurvature(Vector3 velocityVector, Vector3 accelerationVector)
+    private float CalculateCurvature(Vector3 velocityVector, Vector3 accelerationVector)
     {
         // Formula no.9
         Vector3 curvatureCross = Vector3.Cross(accelerationVector, velocityVector);
-        float curvature = Convert.ToSingle(curvatureCross.magnitude / Math.Pow(velocityVector.magnitude,3));
+        float curvature = (float)(curvatureCross.magnitude / Math.Pow(velocityVector.magnitude,3));
         return curvature;
     }
 
-    float CalculateTime(Queue<Vector3> accelQueue)
+    private float CalculateTime(Queue<Vector3> accelQueue)
     {
         float time = 0;
         // Formula no.24
@@ -226,7 +241,7 @@ public class MotionManager : MonoBehaviour
         return time / T;
     }
 
-    Vector3 CalculateSpaceNumerator(Queue<Vector3> positionQueue)
+    private Vector3 CalculateSpaceNumerator(Queue<Vector3> positionQueue)
     {
         Vector3[] positionArray = positionQueue.ToArray();
         Vector3 spaceNumerator;
@@ -236,7 +251,7 @@ public class MotionManager : MonoBehaviour
         return spaceNumerator;
     }
     
-    float CalculateSpace(Queue<Vector3> spaceNumeratorQueue)
+    private float CalculateSpace(Queue<Vector3> spaceNumeratorQueue)
     {
         Vector3[] spaceNumeratorArray = spaceNumeratorQueue.ToArray();
         Vector3 spaceNumeratorSumVector = Vector3.zero;
@@ -258,7 +273,7 @@ public class MotionManager : MonoBehaviour
         return space;
     }
 
-    float CalculateFlow(Queue<Vector3> jerkQueue)
+    private float CalculateFlow(Queue<Vector3> jerkQueue)
     {
         float flow = 0;
         // Formula no.29
@@ -273,7 +288,7 @@ public class MotionManager : MonoBehaviour
     private static Tuple<float, float> ScaleValue(float value, float valueMax)
     {
         if (value > valueMax)
-        { valueMax = value; };
+            valueMax = value;
         float result = value / valueMax;
         var tuple = new Tuple<float, float>(result, valueMax);
         return tuple;
